@@ -1,0 +1,160 @@
+"""
+Practica 2 - Unidad 2: Encapsulamiento y Manejo de Datos
+"""
+from datetime import date, timedelta
+
+class Libro:
+    """Representa un libro fisico disponible en la biblioteca."""
+
+    def __init__(self, titulo, autor, isbn, ejemplares_totales, **detalles):
+        self.titulo = titulo
+        self.autor = autor
+        self.isbn = isbn
+        self.ejemplares_totales = ejemplares_totales
+        self._ejemplares_disponibles = ejemplares_totales
+        self.detalles = detalles  # datos opcionales: editorial, año, categoria...
+
+    @property
+    def disponibles(self):
+        """Getter: cantidad actual de ejemplares disponibles."""
+        return self._ejemplares_disponibles
+
+    @disponibles.setter
+    def disponibles(self, valor):
+        """Setter: valida que el valor este entre 0 y ejemplares_totales."""
+        if valor < 0 or valor > self.ejemplares_totales:
+            raise ValueError("disponibles debe estar entre 0 y ejemplares_totales")
+        self._ejemplares_disponibles = valor
+
+    def esta_disponible(self):
+        """True si queda al menos un ejemplar disponible."""
+        return self.disponibles > 0
+
+    def prestar(self):
+        """Reduce en 1 los ejemplares disponibles de este libro."""
+        if not self.esta_disponible():
+            raise ValueError(f"No hay ejemplares disponibles de {self.titulo}")
+        self.disponibles = self.disponibles - 1
+
+    def devolver(self):
+        """Aumenta en 1 los ejemplares disponibles de este libro."""
+        self.disponibles = self.disponibles + 1
+
+class Usuario:
+    """Representa a la persona que puede solicitar libros en prestamo."""
+
+    def __init__(self, nombre, codigo_estudiantil, tipo_usuario="estudiante"):
+        self.nombre = nombre
+        self._codigo_estudiantil = codigo_estudiantil
+        self.tipo_usuario = tipo_usuario
+
+    @property
+    def codigo_estudiantil(self):
+        """Solo lectura: el codigo no deberia cambiar tras crear el usuario."""
+        return self._codigo_estudiantil
+
+    @staticmethod
+    def es_codigo_valido(codigo):
+        """Valida un codigo (10 digitos) sin necesitar un Usuario creado."""
+        return codigo.isdigit() and len(codigo) == 10
+
+class Prestamo:
+    """Relaciona un Libro con un Usuario en un momento dado."""
+
+    def __init__(self, libro, usuario, fecha_inicio, fecha_devolucion_esperada):
+        self.libro = libro
+        self.usuario = usuario
+        self.fecha_inicio = fecha_inicio
+        self.fecha_devolucion_esperada = fecha_devolucion_esperada
+
+    @classmethod
+    def registrar_hoy(cls, libro, usuario, dias_prestamo=14):
+        """Constructor alternativo: registra el prestamo con la fecha de hoy."""
+        hoy = date.today()
+        fecha_limite = hoy + timedelta(days=dias_prestamo)
+        return cls(libro, usuario, hoy, fecha_limite)
+
+class ComprobantePrestamo:
+    """Comprobante inmutable: una vez emitido, no puede alterarse."""
+
+    __slots__ = ("_libro_titulo", "_usuario_nombre",
+                 "_fecha_inicio", "_fecha_devolucion_esperada")
+
+    def __init__(self, prestamo):
+        self._libro_titulo = prestamo.libro.titulo
+        self._usuario_nombre = prestamo.usuario.nombre
+        self._fecha_inicio = prestamo.fecha_inicio
+        self._fecha_devolucion_esperada = prestamo.fecha_devolucion_esperada
+
+    # Las siguientes propiedades son de solo lectura (sin @setter):
+    # el comprobante ya fue emitido y no se debe poder editar.
+    @property
+    def libro_titulo(self):
+        return self._libro_titulo
+
+    @property
+    def usuario_nombre(self):
+        return self._usuario_nombre
+
+    @property
+    def fecha_inicio(self):
+        return self._fecha_inicio
+
+    @property
+    def fecha_devolucion_esperada(self):
+        return self._fecha_devolucion_esperada
+
+if __name__ == "__main__":
+    # --- Creacion de objetos ---
+    libro_1 = Libro("Fluent Python", "Luciano Ramalho", "978-1492056355", 3)
+    libro_2 = Libro("Clean Code", "Robert C. Martin", "978-0132350884", 2,
+                     editorial="Prentice Hall", año=2008)
+    usuario_1 = Usuario("Juan", "1093812345")
+
+    # "Fluent Python": propiedad disponibles, prestamo y comprobante
+    # disponibles: se acepta 2, se rechaza 10 (supera ejemplares_totales)
+    libro_1.disponibles = 2
+    try:
+        libro_1.disponibles = 10
+    except ValueError:
+        pass
+    print(f"'{libro_1.titulo}': {libro_1.disponibles} disponibles de "
+          f"{libro_1.ejemplares_totales} (se rechazó asignar 10)")
+
+    # registrar_hoy: constructor alternativo con la fecha actual
+    prestamo_1 = Prestamo.registrar_hoy(libro_1, usuario_1)
+    print(f"Préstamo de '{prestamo_1.libro.titulo}': "
+          f"del {prestamo_1.fecha_inicio} al {prestamo_1.fecha_devolucion_esperada}")
+
+    # comprobante inmutable: se intenta editar y agregar un campo nuevo
+    comprobante = ComprobantePrestamo(prestamo_1)
+    try:
+        comprobante.libro_titulo = "Fluent Python (2da edicion)"
+    except AttributeError:
+        pass
+    try:
+        comprobante.vencido = True
+    except AttributeError:
+        pass
+    print(f"Comprobante de '{comprobante.libro_titulo}' a nombre de "
+          f"{comprobante.usuario_nombre}: no se pudo editar ni agregar campos nuevos")
+
+    # "Clean Code": constructor flexible y metodos que usan self
+    detalles_texto = ", ".join(
+        f"{clave}: {valor}" for clave, valor in libro_2.detalles.items()
+    )
+    print(f"{usuario_1.nombre} ({usuario_1.tipo_usuario}) — "
+          f"'{libro_2.titulo}': {detalles_texto}")
+
+    libro_2.prestar()
+    disponibles_tras_prestamo = libro_2.disponibles
+    libro_2.devolver()
+    print(f"'{libro_2.titulo}': se prestó (quedaron {disponibles_tras_prestamo}) "
+          f"y se devolvió (ahora {libro_2.disponibles})")
+
+    # Validacion del codigo estudiantil (Parte E - staticmethod)
+    codigo_1, codigo_2 = "1093812345", "abc"
+    valido_1 = "válido" if Usuario.es_codigo_valido(codigo_1) else "inválido"
+    valido_2 = "válido" if Usuario.es_codigo_valido(codigo_2) else "inválido"
+    print(f"Código {codigo_1} ({usuario_1.nombre}): {valido_1} | "
+          f"Código '{codigo_2}': {valido_2}")
